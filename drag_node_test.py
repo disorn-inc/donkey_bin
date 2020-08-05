@@ -52,7 +52,8 @@ class ControlLane():
         global emer
         emer = 1
         self.pub_emer.publish(emer)
-        kp = 0.45
+        #kp = 0.3
+        kp = 0.27
         ki = 0
         kd = 0
         li = 0
@@ -85,7 +86,7 @@ class ControlLane():
                 #li = 0.65
             #if pv_angle_raw <=85 and pv_angle_raw >=15:
                 #az = outputpid* 1 / 100
-            li = 0.65
+            li = 1
             az = outputpid* 1 / 100
             twist.linear.x = li
             twist.angular.z = az
