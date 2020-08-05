@@ -28,7 +28,8 @@ upper_yellow = np.uint8([38, 255, 255])
 lower_white = np.uint8([0, 200, 0])
 upper_white = np.uint8([255, 255, 255])
 
-Servo_morter = 0
+Servo_motor = 0
+stateRight=0
 slope = 1
 intercept = 1
 xpointbot = 0
@@ -99,7 +100,7 @@ def Getcam(data):
     cv2.circle(cv_image,(int(cv_image.shape[1]*0.87),int(cv_image.shape[0]*0.4)),1,(0,0,255),2) #tr
     """ #0.87
     pts1 = np.float32([[int(cv_image.shape[1]*0.15),int(cv_image.shape[0]*0.35)],[int(cv_image.shape[1]*0.815) \
-    ,int(cv_image.shape[0]*0.4)],[0,int(cv_image.shape[0]*0.6)],[int(cv_image.shape[1]),int(cv_image.shape[0]*0.6)]])
+    ,int(cv_image.shape[0]*0.4)],[0,int(cv_image.shape[0]*0.52)],[int(cv_image.shape[1]),int(cv_image.shape[0]*0.6)]])
     # tl, tr, btl, btr
     pts2 = np.float32([[0, 0], [Size_crop[0], 0], [0, Size_crop[1]], [Size_crop[0], Size_crop[1]]])
     matrix = cv2.getPerspectiveTransform(pts1, pts2)
@@ -113,6 +114,7 @@ def Getcam(data):
 
     global red_traffic
     global green_traffic
+    global Servo_motor
     red_traffic = 0
     green_traffic=1600
     if (red_traffic >= 50) :
@@ -121,8 +123,8 @@ def Getcam(data):
     if green_traffic> 1500 :
       run = 1
       result_traff1 = green_traffic
-      #pub_traff = rospy.Publisher('/light', Int8, queue_size=1)
-      #pub_traff.publish(run)
+      pub_traff = rospy.Publisher('/light', Int8, queue_size=1)
+      pub_traff.publish(run)
 
     cv2.circle(cv_image,(0,int(cv_image.shape[0]*0.6)),1,(0,0,255),2) #btl
     cv2.circle(cv_image,(int(cv_image.shape[1]),int(cv_image.shape[0]*0.6)),1,(0,0,255),2) #btr
@@ -133,21 +135,23 @@ def Getcam(data):
 
     result1, crop1, servo1, sum1 = getROIRight(result)
     cv2.imshow("Right", result1)
-    result, crop, servo, sum = getROILeft(result)
+    result, crop, servo, sum2 = getROILeft(result)
     cv2.imshow("Left", result)
 
     #Send Servo
     print("Right: ",servo1)
     print("Left: ",servo)
-    if sum1 > sum:
+    if (sum1 > sum2 and sum1 >= 50000):
         print("Direction: Right")
-        Servo_morter = servo1
-    else:
+        Servo_motor = servo1
+        stateRight=1
+    elif (sum2 >= 50000):
         print("Direction: Left")
-        Servo_morter = servo
+        Servo_motor = servo
+        stateRight=0
     pub = rospy.Publisher('/angle', Float64, queue_size=3)
-    pub.publish(Servo_morter)
-    rospy.loginfo(Servo_morter)
+    pub.publish(Servo_motor)
+    rospy.loginfo(Servo_motor)
 
 
     # cv2.imshow('color',crop)
@@ -204,14 +208,14 @@ def getROILeft(result):
     x_C[0], x_C[1], x_C[2] = Find_slope(blob_c, main_Y, y_bot, y_top,)   
     cv2.line(result, (int(x_C[2]), y_mid),(int(result.shape[1]*0.5), y_mid), (180, 0, 255), 1,  8)
     cv2.line(result, (int(x_C[0]), y_bot),(int(x_C[1]), y_top), (20,255,150), 2,  8)
-    servo_for_left = 100-Cal_Servo(result,x_C[2])
+    servo_for_left = Cal_Servo(result,x_C[2])
     result =np.concatenate((result,BLOB),axis=0)
-    sum = np.sum(BLOB)
-    print("SUM Left: ", sum)
+    sum_yellow = np.sum(BLOB)
+    print("SUM Left: ", sum_yellow)
     crop = cv2.resize(BLOB, (0,0), fx=0.5, fy=0.5)
     result = cv2.resize(result, (0,0), fx=0.5, fy=0.5)
     #cv2.imshow("Left",result)
-    return result, crop, servo_for_left, sum
+    return result, crop, servo_for_left, sum_yellow
 
 def getROIRight(result):
     result = Crop_to_Cal_Right(result)
@@ -247,18 +251,18 @@ def getROIRight(result):
     cv2.line(result, (int(x_C[0]), y_bot_r),(int(x_C[1]), y_top_r), (20,255,150), 2,  8)
     servo_for_right = Cal_Servo(result,x_C[2])
     result =np.concatenate((result,BLOB),axis=0)
-    sum = np.sum(BLOB)
-    print("SUM Right: ", sum)
+    sum_yellow = np.sum(BLOB)
+    print("SUM Right: ", sum_yellow)
     crop = cv2.resize(BLOB, (0,0), fx=0.5, fy=0.5)
     result = cv2.resize(result, (0,0), fx=0.5, fy=0.5)
     #cv2.imshow("Right",result)
-    return result, crop, servo_for_right, sum
+    return result, crop, servo_for_right, sum_yellow
 
 def Crop_to_Cal_Right(result):
     trig_modqe = 1
     A1 = [0 , int(result.shape[0])+50]
     A2 = [int(result.shape[1]*0.15) , int(result.shape[0])]
-    A3 = [int(result.shape[1]*0.60), int(result.shape[0]*0.9)] #org 0.9
+    A3 = [int(result.shape[1]*0.68), int(result.shape[0]*0.9)] #org 0.9
     A4 = [int(result.shape[1]*1) , int(result.shape[0]*0.6)]
     if trig_mode ==0:
         crop_img = result[A3[1]:A1[1], A1[0]:A2[0]]
@@ -271,7 +275,7 @@ def Crop_to_Cal_Left(result):
     upperLeft = [0 , int(result.shape[0])+50]
     upperRight = [int(result.shape[1]*0.15) , int(result.shape[0])]
     lowerLeft = [int(result.shape[1]*0), int(result.shape[0]*0.9)] #org 0.9
-    lowerRight = [int(result.shape[1]*0.4) , int(result.shape[0]*0.6)]
+    lowerRight = [int(result.shape[1]*0.3) , int(result.shape[0]*0.6)]
     if trig_mode ==0:
         crop_img = result[lowerLeft[1]:upperLeft[1], upperLeft[0]:upperRight[0]]
     else :
