@@ -11,7 +11,6 @@ roslib.load_manifest('usb_cam')
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 
-
 lower_red = np.array([0, 50, 180])
 upper_red = np.array([5, 255, 255])
 
@@ -92,7 +91,10 @@ def Getcam(data):
     pts2 = np.float32([[0, 0], [Size_crop[0], 0], [0, Size_crop[1]], [Size_crop[0], Size_crop[1]]])
     matrix = cv2.getPerspectiveTransform(pts1, pts2)
     result = cv2.warpPerspective(cv_image, matrix, (Size_crop[0], Size_crop[1]))
-    cv2.imshow('perspect',result)
+    #cv2.imshow('perspect',result)
+    perspectiveResult = result
+    cv2.imshow('perspect',perspectiveResult)
+    perspectiveResult = cv2.resize(result, (0,0), fx=4, fy=4)
     result = Crop_to_Cal(result)
     #cv2.imshow('kkk',result)
     result = cv2.resize(result, (0,0), fx=4, fy=4) 
@@ -101,7 +103,6 @@ def Getcam(data):
       mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
     elif MODE_COLOR == 1:
       hsv = cv2.cvtColor(result, cv2.COLOR_BGR2HLS)
- 
       mask = cv2.inRange(hsv, lower_white, upper_white)
     
     crop = cv2.bitwise_and(result, result, mask=mask)
@@ -177,10 +178,10 @@ def point(cv_image):
 
 def Crop_to_Cal(result):
     global trig_modqe
-    A1 = [0 , int(result.shape[0])]
+    A1 = [0 , int(result.shape[0])+50]
     A2 = [int(result.shape[1]*0.15) , int(result.shape[0])]
-    A3 = [int(result.shape[1]*0.635), int(result.shape[0]*0.8)] #org 0.9
-    A4 = [int(result.shape[1]*0.835) , int(result.shape[0]*0.6)]
+    A3 = [int(result.shape[1]*0.60), int(result.shape[0]*0.9)] #org 0.9
+    A4 = [int(result.shape[1]*1) , int(result.shape[0]*0.6)]
     if trig_mode ==0:
         crop_img = result[A3[1]:A1[1], A1[0]:A2[0]]
     else :
