@@ -5,18 +5,20 @@ import numpy as np
 import statistics
 import sys
 import rospy
-from std_msgs.msg import String,Float64,Int64
+from std_msgs.msg import String,Float64,Int64,Bool,Int8
 import roslib
 roslib.load_manifest('usb_cam')
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 import time
 bridge = CvBridge()
+allow_detect_sign=1
 
 def initial():
-    rospy.Subscriber("/usb_cam/image_raw",Image,Getcam_sign)
+    rospy.Subscriber("/usb_cam/image_raw",Image,Getcam_sign,queue_size=5,buff_size=2**24)
 
 def Getcam_sign(data):
+    global allow_detect_sign
     cv_image = bridge.imgmsg_to_cv2(data, "bgr8")
     h, w = None, None
 
@@ -26,7 +28,8 @@ def Getcam_sign(data):
 
     network = cv2.dnn.readNetFromDarknet(path+'yolov4-tiny-3l.cfg',
                                         path+'yolov4-tiny-3l_3000.weights')
-
+    network.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+    network.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
     layers_names_all = network.getLayerNames()
     layers_names_output = \
         [layers_names_all[i[0] - 1] for i in network.getUnconnectedOutLayers()]
@@ -70,20 +73,27 @@ def Getcam_sign(data):
     results = cv2.dnn.NMSBoxes(bounding_boxes, confidences,
                             probability_minimum, threshold)
 
-    if len(results) > 0:
-        for i in results.flatten():
-            x_min, y_min = bounding_boxes[i][0], bounding_boxes[i][1]
-            box_width, box_height = bounding_boxes[i][2], bounding_boxes[i][3]
-            colour_box_current = colours[class_numbers[i]].tolist()
-            cv2.rectangle(cv_image, (x_min, y_min),
-                        (x_min + box_width, y_min + box_height),
-                        colour_box_current, 2)
-            text_box_current = '{}: {:.4f}'.format(labels[int(class_numbers[i])],
-                                                confidences[i])
-            pub.publish(class_numbers[i])
-            rospy.loginfo(class_numbers[i])
-            cv2.putText(cv_image, text_box_current, (x_min, y_min - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour_box_current, 2)
+    if(allow_detect_sign)>0:
+        if len(results) > 0:
+            for i in results.flatten():
+                x_min, y_min = bounding_boxes[i][0], bounding_boxes[i][1]
+                box_width, box_height = bounding_boxes[i][2], bounding_boxes[i][3]
+                colour_box_current = colours[class_numbers[i]].tolist()
+                cv2.rectangle(cv_image, (x_min, y_min),
+                            (x_min + box_width, y_min + box_height),
+                            colour_box_current, 2)
+                text_box_current = '{}: {:.4f}'.format(labels[int(class_numbers[i])],
+                                                    confidences[i])
+                cv2.putText(cv_image, text_box_current, (x_min, y_min - 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour_box_current, 2)
+                araimairu = int(class_numbers[i])
+                araimairu = araimairu+1
+                sign_traff = rospy.Publisher('/sign_bool', Bool, queue_size=1)
+                # rospy.loginfo(class_numbers[i])
+                sign_traff.publish(bool(araimairu)) # want to send boolean ==1
+                allow_detect_sign=0
+        
+    allow_detect_sign = rospy.Subscriber('/allow_yolo',Int8,queue_size=3)
 
     cv2.namedWindow('YOLO v3 Real Time Detections', cv2.WINDOW_NORMAL)
     cv2.imshow('YOLO v3 Real Time Detections', cv_image)
@@ -102,8 +112,6 @@ def main(args):
   except KeyboardInterrupt:
     print("Shutting down")
   cv2.destroyAllWindows()
-
-
 
 if __name__ == '__main__':
     main(sys.argv)
